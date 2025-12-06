@@ -8,9 +8,10 @@ services:
     environment:
       - TZ=America/New_York
       - PYTHONUNBUFFERED=1
-    restart: "no"
+    restart: always  # Auto-restart on Pi reboot
     
   # Scheduled runner using ofelia (cron for Docker)
+  # Works on Raspberry Pi (ARM64)
   scheduler:
     image: mcuadros/ofelia:latest
     container_name: stock-scheduler
@@ -18,9 +19,11 @@ services:
       - trader
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: daemon --docker
+    restart: always  # Auto-restart on Pi reboot
     labels:
       ofelia.enabled: "true"
-      # Run every 2 hours during market hours (9:30 AM - 4:00 PM EST, Mon-Fri)
+      # Run every 2 hours during market hours (9:30, 11:30, 13:30, 15:30 EST, Mon-Fri)
       ofelia.job-exec.trading.schedule: "0 30 9,11,13,15 * * 1-5"
       ofelia.job-exec.trading.container: "stock-trader"
-      ofelia.job-exec.trading.command: "python -m src.main longrun --execute"
+      ofelia.job-exec.trading.command: "python -m src.main longrun --execute --email"

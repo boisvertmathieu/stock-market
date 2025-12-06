@@ -544,6 +544,18 @@ def cmd_longrun(args):
                 action_color = 'green' if trade['action'] == 'BUY' else 'red'
                 console.print(f"  [{action_color}]{trade['action']}[/] {trade['shares']} {trade['ticker']} @ ${trade['price']:.2f}")
     
+    # Send email notification
+    if args.email:
+        from src.email_notifier import send_trading_summary
+        if not args.json:
+            console.print("\n[dim]Sending email summary...[/]")
+        if send_trading_summary(result, executed=args.execute):
+            if not args.json:
+                console.print("[green]✅ Email sent![/]")
+        else:
+            if not args.json:
+                console.print("[yellow]⚠️ Email not sent (check SMTP config)[/]")
+    
     return 0
 
 
@@ -611,6 +623,7 @@ Examples:
     longrun_parser.add_argument('--init', type=float, help='Initialize with capital amount')
     longrun_parser.add_argument('--status', action='store_true', help='Show current portfolio status')
     longrun_parser.add_argument('--execute', action='store_true', help='Execute recommended trades')
+    longrun_parser.add_argument('--email', action='store_true', help='Send email summary')
     longrun_parser.add_argument('--json', action='store_true', help='Output as JSON')
     longrun_parser.set_defaults(func=cmd_longrun)
     
