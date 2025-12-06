@@ -1,0 +1,26 @@
+services:
+  trader:
+    build: .
+    container_name: stock-trader
+    volumes:
+      - ./data:/app/data  # Persist state between runs
+      - ./.env:/app/.env:ro  # Environment variables
+    environment:
+      - TZ=America/New_York
+      - PYTHONUNBUFFERED=1
+    restart: "no"
+    
+  # Scheduled runner using ofelia (cron for Docker)
+  scheduler:
+    image: mcuadros/ofelia:latest
+    container_name: stock-scheduler
+    depends_on:
+      - trader
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    labels:
+      ofelia.enabled: "true"
+      # Run every 2 hours during market hours (9:30 AM - 4:00 PM EST, Mon-Fri)
+      ofelia.job-exec.trading.schedule: "0 30 9,11,13,15 * * 1-5"
+      ofelia.job-exec.trading.container: "stock-trader"
+      ofelia.job-exec.trading.command: "python -m src.main longrun --execute"

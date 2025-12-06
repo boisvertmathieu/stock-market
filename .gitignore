@@ -3,3 +3,8 @@
 /TRADING-STRATEGIES.md
 /__pycache__
 /venv
+**/__pycache__
+**/tui/node_modules
+.env
+data/
+n8n*
