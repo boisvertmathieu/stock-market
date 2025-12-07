@@ -70,13 +70,13 @@ echo "$GIT_COMMIT" > .git_version
 # Rebuild Docker image
 echo ""
 echo "🔨 Rebuilding Docker image..."
-docker-compose build --no-cache
+docker compose build --no-cache
 
 # Restart containers gracefully
 echo ""
 echo "🔄 Restarting containers..."
-docker-compose down
-docker-compose up -d
+docker compose down
+docker compose up -d
 
 # Wait for containers to start
 echo ""
@@ -86,7 +86,7 @@ sleep 5
 # Check status
 echo ""
 echo "📊 Container status:"
-docker-compose ps
+docker compose ps
 
 # Verify trader is working
 echo ""
