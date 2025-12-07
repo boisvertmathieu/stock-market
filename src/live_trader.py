@@ -349,7 +349,7 @@ class LiveTrader:
             raise ValueError("No state found. Initialize first with --init")
         
         # Load FinnHub data
-        self.finnhub.fetch_all(timeout=180)
+        self.finnhub.fetch_all()
         
         # Get market data for all tickers
         market_data = {}
