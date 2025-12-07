@@ -1,6 +1,6 @@
 #!/bin/bash
 # update.sh - Update Stock Market Trader on Raspberry Pi
-# Usage: ./update.sh [--force]
+# Usage: ./update.sh [--force] --
 
 set -e
 
