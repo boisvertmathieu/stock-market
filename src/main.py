@@ -342,15 +342,15 @@ def cmd_simulate(args):
         if args.json:
             output = {
                 'strategy': 'momentum',
-                'initial_capital': result.initial_capital,
-                'final_value': result.final_value,
-                'total_return': result.total_return,
-                'annualized_return': result.annualized_return,
-                'sharpe_ratio': result.sharpe_ratio,
-                'max_drawdown': result.max_drawdown,
-                'benchmark_return': result.benchmark_return,
-                'alpha': result.alpha,
-                'beat_benchmark': result.total_return > result.benchmark_return,
+                'initial_capital': float(result.initial_capital),
+                'final_value': float(result.final_value),
+                'total_return': float(result.total_return),
+                'annualized_return': float(result.annualized_return),
+                'sharpe_ratio': float(result.sharpe_ratio),
+                'max_drawdown': float(result.max_drawdown),
+                'benchmark_return': float(result.benchmark_return),
+                'alpha': float(result.alpha),
+                'beat_benchmark': bool(result.total_return > result.benchmark_return),
                 'holdings': result.portfolio[-1]['holdings'] if result.portfolio else []
             }
             print(json.dumps(output, indent=2))
@@ -417,18 +417,18 @@ def cmd_simulate(args):
         if args.json:
             output = {
                 'strategy': 'active_trading',
-                'initial_capital': result.initial_capital,
-                'final_value': result.final_value,
-                'total_return': result.total_return,
-                'annualized_return': result.annualized_return,
-                'sharpe_ratio': result.sharpe_ratio,
-                'max_drawdown': result.max_drawdown,
-                'win_rate': result.win_rate,
-                'profit_factor': result.profit_factor,
-                'benchmark_return': result.benchmark_return,
-                'alpha': result.alpha,
-                'total_trades': result.total_trades,
-                'beat_benchmark': result.total_return > result.benchmark_return
+                'initial_capital': float(result.initial_capital),
+                'final_value': float(result.final_value),
+                'total_return': float(result.total_return),
+                'annualized_return': float(result.annualized_return),
+                'sharpe_ratio': float(result.sharpe_ratio),
+                'max_drawdown': float(result.max_drawdown),
+                'win_rate': float(result.win_rate),
+                'profit_factor': float(result.profit_factor),
+                'benchmark_return': float(result.benchmark_return),
+                'alpha': float(result.alpha),
+                'total_trades': int(result.total_trades),
+                'beat_benchmark': bool(result.total_return > result.benchmark_return)
             }
             print(json.dumps(output, indent=2))
         else:

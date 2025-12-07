@@ -193,6 +193,7 @@ class LiveTrader:
                     'value_score': fh_data.value_score if fh_data else 0,
                     'pe_ratio': fh_data.pe_ratio if fh_data else None,
                     'change_percent': fh_data.change_percent if fh_data else 0,
+                    'sentiment_score': fh_data.sentiment_score if fh_data else 0,
                 } if fh_data else None
             }
         except Exception as e:
@@ -200,17 +201,21 @@ class LiveTrader:
             return None
     
     def _calculate_signal_score(self, data: Dict) -> float:
-        """Calculate combined signal score."""
-        # Base technical score (50%)
-        tech_score = data['technical_signal'] * 0.5
+        """Calculate combined signal score including sentiment."""
+        # Base technical score (45%)
+        tech_score = data['technical_signal'] * 0.45
         
-        # FinnHub data (50%)
+        # FinnHub data (35% fundamental/analyst + 20% sentiment)
         fh = data.get('finnhub')
         if fh:
-            analyst = fh.get('analyst_score', 0) * 0.25
-            value = fh.get('value_score', 0) * 0.15
-            momentum = 0.10 if fh.get('change_percent', 0) > 0 else -0.05
-            return tech_score + analyst + value + momentum
+            analyst = fh.get('analyst_score', 0) * 0.20
+            value = fh.get('value_score', 0) * 0.10
+            momentum = 0.05 if fh.get('change_percent', 0) > 0 else -0.03
+            
+            # Sentiment score (20% weight)
+            sentiment = fh.get('sentiment_score', 0) * 0.20
+            
+            return tech_score + analyst + value + momentum + sentiment
         
         return tech_score
     
@@ -344,7 +349,7 @@ class LiveTrader:
             raise ValueError("No state found. Initialize first with --init")
         
         # Load FinnHub data
-        self.finnhub.fetch_all(timeout=30)
+        self.finnhub.fetch_all(timeout=180)
         
         # Get market data for all tickers
         market_data = {}

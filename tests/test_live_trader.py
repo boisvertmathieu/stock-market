@@ -128,19 +128,20 @@ class TestLiveTrader:
             'finnhub': None
         }
         score = trader._calculate_signal_score(data)
-        assert score == 0.75  # 1.5 * 0.5
+        assert score == 0.675  # 1.5 * 0.45 (45% weight for technical)
         
-        # Test with FinnHub data
+        # Test with FinnHub data including sentiment
         data_with_fh = {
             'technical_signal': 1.0,
             'finnhub': {
                 'analyst_score': 0.5,
                 'value_score': 0.6,
                 'change_percent': 2.0,
+                'sentiment_score': 0.5,
             }
         }
         score_fh = trader._calculate_signal_score(data_with_fh)
-        # 0.5 + (0.5 * 0.25) + (0.6 * 0.15) + 0.10 = 0.5 + 0.125 + 0.09 + 0.10 = 0.815
+        # 0.45 + (0.5 * 0.20) + (0.6 * 0.10) + 0.05 + (0.5 * 0.20) = 0.45 + 0.10 + 0.06 + 0.05 + 0.10 = 0.76
         assert score_fh > score
 
 

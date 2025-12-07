@@ -1,0 +1,536 @@
+{
+  "name": "FinnHub API with Webhook Endpoint",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "stock-market-data",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e2fb3bba-8f5c-4e6b-ae9d-3118c866fda5",
+      "name": "Webhook - Market Data API",
+      "type": "n8n-nodes-base.webhook",
+      "position": [
+        -960,
+        -160
+      ],
+      "webhookId": "stock-market-data-webhook",
+      "typeVersion": 2,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "gMWJ7ggGMxl7135Q",
+          "name": "Header Auth account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// List of tickers to analyze\nconst tickers = [\"AAPL\", \"META\", \"NVDA\", \"TSLA\", \"MSFT\", \"AMZN\", \"GOOGL\", \"AMD\", \"NFLX\", \"JPM\", \"SPY\", \"QQQ\"];\n\nlet output = [];\n\nfor (const ticker of tickers) {\n  output.push({ ticker: ticker });\n}\n\nreturn output;"
+      },
+      "id": "0ff60d7d-7345-4f1a-8f40-d932e40b0fe2",
+      "name": "Webhook Prep Tickers",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        -736,
+        -160
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "options": {
+          "reset": false
+        }
+      },
+      "id": "8030494b-01d2-4094-bc73-219ef9a0fb74",
+      "name": "Webhook Loop Over Items",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [
+        -512,
+        -160
+      ],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "url": "https://finnhub.io/api/v1/quote",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "symbol",
+              "value": "={{ $('Webhook Loop Over Items').item.json.ticker }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "efc989e0-a316-46cd-a094-06cb485c34e0",
+      "name": "FinnHub Quote",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        -224,
+        -448
+      ],
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 5,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "fjgM7eQtmgFwPRPr",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://finnhub.io/api/v1/stock/metric",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "symbol",
+              "value": "={{ $('Webhook Loop Over Items').item.json.ticker }}"
+            },
+            {
+              "name": "metric",
+              "value": "all"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "d7e31ecf-5e42-491c-abce-592d8c1b43f4",
+      "name": "FinnHub Metrics",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        -224,
+        -256
+      ],
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 5,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "fjgM7eQtmgFwPRPr",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://finnhub.io/api/v1/company-news",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "symbol",
+              "value": "={{ $('Webhook Loop Over Items').item.json.ticker }}"
+            },
+            {
+              "name": "from",
+              "value": "={{ DateTime.now().minus({days: 3}).toFormat('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "to",
+              "value": "={{ DateTime.now().toFormat('yyyy-MM-dd') }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "6dcd548d-f3dd-4d0a-a0cd-f61f1500291d",
+      "name": "FinnHub Company News",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        -224,
+        -64
+      ],
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 5,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "fjgM7eQtmgFwPRPr",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://finnhub.io/api/v1/stock/recommendation",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "symbol",
+              "value": "={{ $('Webhook Loop Over Items').item.json.ticker }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "7b2e3382-2e94-45be-8adc-8dbdd1d30862",
+      "name": "FinnHub Recommendations",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        -224,
+        128
+      ],
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 5,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "fjgM7eQtmgFwPRPr",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge-quote-metrics",
+      "name": "Merge Quote+Metrics",
+      "type": "n8n-nodes-base.merge",
+      "position": [
+        80,
+        -352
+      ],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge-news-recs",
+      "name": "Merge News+Recs",
+      "type": "n8n-nodes-base.merge",
+      "position": [
+        80,
+        32
+      ],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge-all-final",
+      "name": "Merge All",
+      "type": "n8n-nodes-base.merge",
+      "position": [
+        304,
+        -160
+      ],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine all data for this ticker\nconst ticker = $('Webhook Loop Over Items').item.json.ticker;\n\n// Get data from each API call by referencing the nodes directly\nlet quote = {};\ntry {\n  quote = $('FinnHub Quote').first().json || {};\n} catch (e) {\n  quote = {};\n}\n\nlet metrics = {};\ntry {\n  metrics = $('FinnHub Metrics').first().json || {};\n} catch (e) {\n  metrics = {};\n}\n\n// Recommendations endpoint returns an array, get the latest one\nlet latestRec = null;\ntry {\n  const recData = $('FinnHub Recommendations').first().json;\n  if (Array.isArray(recData) && recData.length > 0) {\n    latestRec = recData[0];\n  } else if (recData && typeof recData === 'object' && !Array.isArray(recData)) {\n    latestRec = recData;\n  }\n} catch (e) {\n  latestRec = null;\n}\n\n// News endpoint returns an array\nlet news = [];\ntry {\n  const newsData = $('FinnHub Company News').first().json;\n  if (Array.isArray(newsData)) {\n    for (let i = 0; i < Math.min(5, newsData.length); i++) {\n      const item = newsData[i];\n      if (item && item.headline) {\n        news.push({\n          headline: item.headline || '',\n          summary: item.summary || '',\n          datetime: item.datetime || null,\n          source: item.source || '',\n          url: item.url || ''\n        });\n      }\n    }\n  }\n} catch (e) {\n  news = [];\n}\n\nreturn {\n  ticker: ticker,\n  timestamp: new Date().toISOString(),\n  quote: {\n    current_price: quote.c || null,\n    change: quote.d || null,\n    change_percent: quote.dp || null,\n    high: quote.h || null,\n    low: quote.l || null,\n    open: quote.o || null,\n    previous_close: quote.pc || null\n  },\n  metrics: {\n    pe_ratio: metrics.metric?.peBasicExclExtraTTM || null,\n    pe_forward: metrics.metric?.peTTM || null,\n    pb_ratio: metrics.metric?.pbQuarterly || null,\n    ps_ratio: metrics.metric?.psTTM || null,\n    eps: metrics.metric?.epsBasicExclExtraItemsTTM || null,\n    eps_growth: metrics.metric?.epsGrowth5Y || null,\n    revenue_growth: metrics.metric?.revenueGrowth5Y || null,\n    profit_margin: metrics.metric?.netProfitMarginTTM || null,\n    gross_margin: metrics.metric?.grossMarginTTM || null,\n    roe: metrics.metric?.roeTTM || null,\n    roa: metrics.metric?.roaTTM || null,\n    debt_equity: metrics.metric?.totalDebtToEquityQuarterly || null,\n    current_ratio: metrics.metric?.currentRatioQuarterly || null,\n    dividend_yield: metrics.metric?.dividendYieldIndicatedAnnual || null,\n    beta: metrics.metric?.beta || null,\n    market_cap: metrics.metric?.marketCapitalization || null,\n    week52_high: metrics.metric?.['52WeekHigh'] || null,\n    week52_low: metrics.metric?.['52WeekLow'] || null,\n    avg_volume_10d: metrics.metric?.['10DayAverageTradingVolume'] || null\n  },\n  analyst: {\n    buy: latestRec?.buy || 0,\n    hold: latestRec?.hold || 0,\n    sell: latestRec?.sell || 0,\n    strong_buy: latestRec?.strongBuy || 0,\n    strong_sell: latestRec?.strongSell || 0,\n    period: latestRec?.period || null\n  },\n  news: news\n};"
+      },
+      "id": "b5b326a0-fd45-4bbd-ad10-077070cd1a73",
+      "name": "Combine Ticker Data",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        528,
+        -160
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "tickers",
+        "options": {}
+      },
+      "id": "18b8b16a-0ae0-4bad-979a-f4b2454ff3c3",
+      "name": "Aggregate All Tickers",
+      "type": "n8n-nodes-base.aggregate",
+      "position": [
+        880,
+        -160
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format final API response\nconst allData = $input.first().json.tickers || [];\n\nreturn {\n  success: true,\n  timestamp: new Date().toISOString(),\n  source: \"finnhub\",\n  count: allData.length,\n  data: allData\n};"
+      },
+      "id": "659a5f91-a78a-480d-bcef-82e09f3fdc36",
+      "name": "Format API Response",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1104,
+        -160
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "7512b510-3e3e-43bc-81e5-2c041ddfef5f",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [
+        1328,
+        -160
+      ],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "content": "## 🔌 WEBHOOK API ENDPOINT\n\n### URL: `https://boisv.app.n8n.cloud/webhook/stock-market-data`\n\n### Returns:\n- Real-time quotes (price, change, high/low)\n- Fundamental metrics (P/E, EPS, margins)\n- Analyst recommendations (buy/sell ratings)\n- Company news (last 3 days)\n\n### Usage from Python:\n```python\nimport requests\ndata = requests.get('https://boisv.app.n8n.cloud/webhook/stock-market-data').json()\n```",
+        "height": 350,
+        "width": 528
+      },
+      "id": "86fd0366-9ce3-4f3e-88a1-a04bb2969204",
+      "name": "Webhook Info",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1040,
+        -580
+      ],
+      "typeVersion": 1
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook - Market Data API": {
+      "main": [
+        [
+          {
+            "node": "Webhook Prep Tickers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Prep Tickers": {
+      "main": [
+        [
+          {
+            "node": "Webhook Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Aggregate All Tickers",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "FinnHub Quote",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "FinnHub Metrics",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "FinnHub Company News",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "FinnHub Recommendations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FinnHub Quote": {
+      "main": [
+        [
+          {
+            "node": "Merge Quote+Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FinnHub Metrics": {
+      "main": [
+        [
+          {
+            "node": "Merge Quote+Metrics",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "FinnHub Company News": {
+      "main": [
+        [
+          {
+            "node": "Merge News+Recs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FinnHub Recommendations": {
+      "main": [
+        [
+          {
+            "node": "Merge News+Recs",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Quote+Metrics": {
+      "main": [
+        [
+          {
+            "node": "Merge All",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge News+Recs": {
+      "main": [
+        [
+          {
+            "node": "Merge All",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge All": {
+      "main": [
+        [
+          {
+            "node": "Combine Ticker Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine Ticker Data": {
+      "main": [
+        [
+          {
+            "node": "Webhook Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate All Tickers": {
+      "main": [
+        [
+          {
+            "node": "Format API Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format API Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "4d68efdd-1383-4c03-b8f5-6d2da0f9594a",
+  "meta": {
+    "templateId": "5418",
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f0fd7e6fc0839308a8cc59c5d0cebfacce2aa876a53e7f0f72e4158bb6c3b233"
+  },
+  "id": "GVeaqxlrNKR5QZK0",
+  "tags": []
+}

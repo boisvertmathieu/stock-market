@@ -133,10 +133,8 @@ cp .env.example .env
 
 | Variable | Description |
 |----------|-------------|
+| `FINNHUB_API_KEY` | Your Finnhub API key ([get one free](https://finnhub.io/)) |
 | `LONGRUN_STATE_FILE` | Path to portfolio state file |
-| `N8N_WEBHOOK_URL` | n8n webhook for Finnhub data |
-| `N8N_AUTH_HEADER` | Webhook authentication header |
-| `N8N_AUTH_VALUE` | Webhook authentication value |
 | `SMTP_HOST` | SMTP server (default: smtp.gmail.com) |
 | `SMTP_PORT` | SMTP port (default: 587) |
 | `SMTP_USER` | Email username |

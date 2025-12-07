@@ -55,6 +55,7 @@ typing_extensions==4.15.0
 tzdata==2025.2
 uc-micro-py==1.0.3
 urllib3==2.6.0
+vaderSentiment==3.3.2
 websockets==15.0.1
 xgboost==3.1.2
 yfinance==0.2.66

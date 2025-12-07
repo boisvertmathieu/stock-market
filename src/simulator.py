@@ -124,8 +124,10 @@ class SimulationResult:
 
 class TradingSimulator:
     """
-    Simulates a daily trading strategy over historical data.
+    Simulates a daily LONG-ONLY trading strategy over historical data.
     Uses technical indicators and ML predictions to select trades.
+    
+    Note: This is a long-only strategy. Short selling is not implemented.
     """
     
     def __init__(
@@ -529,14 +531,11 @@ class TradingSimulator:
                     if analysis:
                         ticker_analyses.append(analysis)
             
-            # 3. Sort by signal strength
+            # 3. Sort by signal strength (LONG-only strategy)
             buy_candidates = [a for a in ticker_analyses if a['combined_score'] >= 1.0]
-            sell_candidates = [a for a in ticker_analyses if a['combined_score'] <= -1.0]
-            
             buy_candidates.sort(key=lambda x: -x['combined_score'])
-            sell_candidates.sort(key=lambda x: x['combined_score'])
             
-            # 4. Check if we should close positions based on signals
+            # 4. Check if we should close LONG positions based on signals
             for ticker in list(self.positions.keys()):
                 pos = self.positions[ticker]
                 
@@ -546,15 +545,6 @@ class TradingSimulator:
                 if ticker_analysis:
                     # Close LONG if signal turns bearish
                     if pos.direction == TradeDirection.LONG and ticker_analysis['combined_score'] <= -0.5:
-                        if ticker in historical_data:
-                            df = historical_data[ticker]
-                            available = df[df.index <= current_date]
-                            if len(available) > 0:
-                                self._close_position(ticker, available['Close'].iloc[-1], current_date, "SIGNAL_REVERSE")
-                                trades_today += 1
-                    
-                    # Close SHORT if signal turns bullish
-                    elif pos.direction == TradeDirection.SHORT and ticker_analysis['combined_score'] >= 0.5:
                         if ticker in historical_data:
                             df = historical_data[ticker]
                             available = df[df.index <= current_date]

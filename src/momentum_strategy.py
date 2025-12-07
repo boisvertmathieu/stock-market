@@ -64,19 +64,19 @@ class MomentumStrategy:
         self._finnhub_loaded = False
     
     def _load_finnhub_data(self):
-        """Load real-time data from FinnHub via n8n webhook."""
+        """Load real-time data from Finnhub API."""
         if self._finnhub_loaded:
             return
         
         try:
             from .finnhub_client import FinnHubClient
             client = FinnHubClient()
-            self._finnhub_data = client.fetch_all(timeout=30)
+            self._finnhub_data = client.fetch_all()
             self._finnhub_loaded = True
             if not self.silent:
-                logger.info(f"Loaded {len(self._finnhub_data)} tickers from FinnHub")
+                logger.info(f"Loaded {len(self._finnhub_data)} tickers from Finnhub")
         except Exception as e:
-            logger.warning(f"Could not load FinnHub data: {e}")
+            logger.warning(f"Could not load Finnhub data: {e}")
             self._finnhub_loaded = True  # Don't retry
     
     def _score_ticker(self, df: pd.DataFrame, ticker: str = None) -> float:
@@ -108,18 +108,20 @@ class MomentumStrategy:
             if vol_trend > 1.2:
                 momentum_score *= 1.1
             
-            # FinnHub fundamental & analyst boost (40%)
+            # FinnHub data: analyst (15%) + fundamental (15%) + sentiment (15%)
             fundamental_score = 0
             analyst_score = 0
+            sentiment_score = 0
+            has_finnhub_data = ticker and ticker in self._finnhub_data
             
-            if ticker and ticker in self._finnhub_data:
+            if has_finnhub_data:
                 fh = self._finnhub_data[ticker]
                 
-                # Analyst score (-1 to +1) -> boost/penalty
-                analyst_score = fh.analyst_score * 0.15  # Up to ±15%
+                # Analyst score (-1 to +1) -> boost/penalty (15%)
+                analyst_score = fh.analyst_score * 0.15
                 
-                # Value score (0 to 1) -> small boost for value
-                fundamental_score = fh.value_score * 0.10  # Up to +10%
+                # Value score (0 to 1) -> boost for value (15%)
+                fundamental_score = fh.value_score * 0.15
                 
                 # High growth penalty if overvalued (P/E > 50)
                 if fh.pe_ratio and fh.pe_ratio > 50:
@@ -128,9 +130,17 @@ class MomentumStrategy:
                 # Profit margin bonus
                 if fh.profit_margin and fh.profit_margin > 0.25:
                     fundamental_score += 0.05
+                
+                # Sentiment score from news (15% weight)
+                sentiment_score = fh.sentiment_score * 0.15
             
-            # Combined score
-            final_score = momentum_score + analyst_score + fundamental_score
+            # Fallback: if no FinnHub data, use 100% momentum scoring
+            if not has_finnhub_data:
+                return momentum_score
+            
+            # Combined score: momentum(55%) + analyst(15%) + fundamental(15%) + sentiment(15%)
+            # Momentum contribution is scaled to 55% when all data available
+            final_score = (momentum_score * 0.55 / 0.6) + analyst_score + fundamental_score + sentiment_score
             
             return final_score
             
