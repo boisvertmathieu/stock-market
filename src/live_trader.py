@@ -189,6 +189,33 @@ class LiveTrader:
             logger.error(f"Failed to load state: {e}")
             return None
     
+    def refresh_prices(self):
+        """
+        Refresh prices for all current positions to ensure status is up to date.
+        Updates the state but does NOT execute any trades.
+        """
+        if not self.state or not self.state.positions:
+            return
+            
+        updated = False
+        for pos in self.state.positions:
+            ticker = pos['ticker']
+            price_data = self.fetcher.get_current_price(ticker)
+            
+            if price_data:
+                current_price = price_data['price']
+                
+                # Update position details
+                pos['current_price'] = current_price
+                pos['unrealized_pnl'] = (current_price - pos['entry_price']) * pos['shares']
+                pos['unrealized_pnl_pct'] = (current_price / pos['entry_price'] - 1) * 100
+                updated = True
+                
+        if updated:
+            # We don't save to disk here to avoid changing "Last Run" logic,
+            # but the in-memory state is now fresh for display.
+            pass
+    
     def _save_state(self):
         """Save state to file."""
         self.state_file.parent.mkdir(parents=True, exist_ok=True)

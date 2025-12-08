@@ -488,6 +488,11 @@ def cmd_longrun(args):
             console.print("[red]No state found. Initialize first with --init[/]")
             return 1
         
+        # Refresh prices for real-time accuracy
+        if not args.json:
+            console.print("[dim]Fetching latest prices...[/]")
+        trader.refresh_prices()
+        
         if args.json:
             print(json.dumps(trader.get_status(), indent=2, default=str))
         else:
