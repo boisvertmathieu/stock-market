@@ -5,6 +5,7 @@ Tracks portfolio state, analyzes market, and recommends trades.
 """
 
 import os
+import gc
 import json
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -118,7 +119,8 @@ class LiveTrader:
         take_profit_pct: float = 0.15,
     ):
         self.state_file = Path(state_file)
-        self.tickers = tickers or TOP_100_TICKERS[:30]
+        # Reduced from 30 to 15 for memory optimization on Raspberry Pi
+        self.tickers = tickers or TOP_100_TICKERS[:15]
         self.max_positions = max_positions
         self.position_size_pct = position_size_pct
         self.stop_loss_pct = stop_loss_pct
@@ -342,63 +344,90 @@ class LiveTrader:
         Returns:
             Dict with recommendations and portfolio status
         """
-        if not self.state:
-            self.load_state()
-        
-        if not self.state:
-            raise ValueError("No state found. Initialize first with --init")
-        
-        # Load FinnHub data
-        self.finnhub.fetch_all()
-        
-        # Get market data for all tickers
-        market_data = {}
-        for ticker in self.tickers:
-            data = self._get_market_data(ticker)
-            if data:
-                market_data[ticker] = data
-        
-        # Update positions with current prices
-        self._update_positions(market_data)
-        
-        # Get recommendations
-        sell_recs = self._check_exits(market_data)
-        buy_recs = self._find_entries(market_data)
-        
-        # Execute if requested
-        executed_trades = []
-        if execute:
-            # Execute sells first
-            for rec in sell_recs:
-                trade = self._execute_sell(rec)
-                if trade:
-                    executed_trades.append(trade)
+        try:
+            if not self.state:
+                self.load_state()
             
-            # Then buys
-            for rec in buy_recs:
-                trade = self._execute_buy(rec)
-                if trade:
-                    executed_trades.append(trade)
+            if not self.state:
+                raise ValueError("No state found. Initialize first with --init")
             
-            self.state.last_run = datetime.now().isoformat()
-            self._save_state()
-        
-        return {
-            'timestamp': datetime.now().isoformat(),
-            'portfolio': {
-                'total_value': self.state.total_value,
-                'cash': self.state.current_cash,
-                'positions_value': self.state.positions_value,
-                'total_return': self.state.total_return,
-                'positions_count': len(self.state.positions),
-            },
-            'recommendations': {
-                'sell': [asdict(r) for r in sell_recs],
-                'buy': [asdict(r) for r in buy_recs],
-            },
-            'executed_trades': executed_trades,
-            'positions': self.state.positions,
-        }
+            # Process tickers in batches to reduce memory usage (Raspberry Pi optimization)
+            batch_size = 5
+            market_data = {}
+            
+            for batch_start in range(0, len(self.tickers), batch_size):
+                batch = self.tickers[batch_start:batch_start + batch_size]
+                
+                # Fetch FinnHub data for this batch only
+                self.finnhub.fetch_all(batch)
+                
+                # Get market data for batch
+                for ticker in batch:
+                    data = self._get_market_data(ticker)
+                    if data:
+                        market_data[ticker] = data
+                
+                # Force garbage collection between batches to free memory
+                gc.collect()
+            
+            # Update positions with current prices
+            self._update_positions(market_data)
+            
+            # Get recommendations
+            sell_recs = self._check_exits(market_data)
+            buy_recs = self._find_entries(market_data)
+            
+            # Execute if requested
+            executed_trades = []
+            if execute:
+                # Execute sells first
+                for rec in sell_recs:
+                    trade = self._execute_sell(rec)
+                    if trade:
+                        executed_trades.append(trade)
+                
+                # Then buys
+                for rec in buy_recs:
+                    trade = self._execute_buy(rec)
+                    if trade:
+                        executed_trades.append(trade)
+                
+                self.state.last_run = datetime.now().isoformat()
+                self._save_state()
+            
+            return {
+                'timestamp': datetime.now().isoformat(),
+                'portfolio': {
+                    'total_value': self.state.total_value,
+                    'cash': self.state.current_cash,
+                    'positions_value': self.state.positions_value,
+                    'total_return': self.state.total_return,
+                    'positions_count': len(self.state.positions),
+                },
+                'recommendations': {
+                    'sell': [asdict(r) for r in sell_recs],
+                    'buy': [asdict(r) for r in buy_recs],
+                },
+                'executed_trades': executed_trades,
+                'positions': self.state.positions,
+            }
+        except Exception as e:
+            logger.error(f"Trading cycle failed: {e}")
+            # Return error state instead of crashing silently
+            return {
+                'timestamp': datetime.now().isoformat(),
+                'error': str(e),
+                'portfolio': {
+                    'total_value': self.state.total_value if self.state else 0,
+                    'cash': self.state.current_cash if self.state else 0,
+                    'positions_value': self.state.positions_value if self.state else 0,
+                    'total_return': self.state.total_return if self.state else 0,
+                    'positions_count': len(self.state.positions) if self.state else 0,
+                },
+                'recommendations': {'sell': [], 'buy': []},
+                'executed_trades': [],
+                'positions': self.state.positions if self.state else [],
+            }
     
     def _execute_buy(self, rec: TradeRecommendation) -> Optional[Dict]:
         """Execute a buy trade."""

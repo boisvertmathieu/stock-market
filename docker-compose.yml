@@ -2,14 +2,17 @@ services:
   trader:
     build: .
     container_name: stock-trader
+    # Memory limits for Raspberry Pi (prevents OOM kills)
+    mem_limit: 256m
+    memswap_limit: 512m
     volumes:
-      - ./data:/app/data  # Persist state between runs
-      - ./.env:/app/.env:ro  # Environment variables
+      - ./data:/app/data # Persist state between runs
+      - ./.env:/app/.env:ro # Environment variables
     environment:
       - TZ=America/New_York
       - PYTHONUNBUFFERED=1
-    restart: always  # Auto-restart on Pi reboot
-    
+    restart: always # Auto-restart on Pi reboot
+
   # Scheduled runner using ofelia (cron for Docker)
   # Works on Raspberry Pi (ARM64)
   scheduler:
@@ -20,7 +23,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     command: daemon --docker
-    restart: always  # Auto-restart on Pi reboot
+    restart: always # Auto-restart on Pi reboot
     labels:
       ofelia.enabled: "true"
       # Run every 2 hours during market hours (9:30, 11:30, 13:30, 15:30 EST, Mon-Fri)

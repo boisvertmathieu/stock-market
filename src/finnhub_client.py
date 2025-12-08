@@ -266,9 +266,9 @@ class FinnHubClient:
         if not data or not isinstance(data, list):
             return []
         
-        # Limit to 5 most recent news items
+        # Limit to 3 most recent news items (reduced for memory optimization)
         news = []
-        for item in data[:5]:
+        for item in data[:3]:
             if item.get("headline"):
                 news.append({
                     "headline": item.get("headline", ""),

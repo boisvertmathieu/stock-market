@@ -17,6 +17,9 @@ RUN mkdir -p /app/data
 # Set environment
 ENV PYTHONPATH=/app
 ENV LONGRUN_STATE_FILE=/app/data/longrun_state.json
+# Memory optimization for Raspberry Pi
+ENV PYTHONMALLOC=malloc
+ENV MALLOC_TRIM_THRESHOLD_=65536
 
 # Default command: run trading cycle
 CMD ["python", "-m", "src.main", "longrun", "--execute"]
