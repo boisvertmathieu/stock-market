@@ -21,5 +21,5 @@ ENV LONGRUN_STATE_FILE=/app/data/longrun_state.json
 ENV PYTHONMALLOC=malloc
 ENV MALLOC_TRIM_THRESHOLD_=65536
 
-# Default command: run trading cycle
-CMD ["python", "-m", "src.main", "longrun", "--execute"]
+# Keep container alive - ofelia scheduler handles the actual execution
+CMD ["tail", "-f", "/dev/null"]
