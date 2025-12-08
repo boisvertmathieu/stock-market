@@ -131,6 +131,34 @@ class LiveTrader:
         self.finnhub = get_finnhub_client()
         self.scorer = UnifiedScorer()
         self.state: Optional[PortfolioState] = None
+        self.risk_per_trade_pct = 0.02  # Risk 2% of equity per trade
+    
+    def _calculate_volatility_adjusted_shares(
+        self, 
+        price: float, 
+        atr: float, 
+        equity: float
+    ) -> int:
+        """
+        Calculate position size based on volatility (Risk Parity).
+        
+        Formula: Shares = (Equity * Risk%) / (StopDistance)
+        Where StopDistance = 2 * ATR
+        """
+        if atr <= 0:
+            return 0
+            
+        risk_amount = equity * self.risk_per_trade_pct
+        stop_distance = 2 * atr
+        
+        # Theoretical shares to risk exactly risk_amount
+        raw_shares = risk_amount / stop_distance
+        
+        # Cap at 25% of equity to avoid over-concentration in low volatility assets
+        max_value = equity * 0.25
+        max_shares_value = int(max_value / price)
+        
+        return min(int(raw_shares), max_shares_value)
         
     def initialize(self, initial_capital: float) -> PortfolioState:
         """Initialize a new trading simulation."""
@@ -314,9 +342,16 @@ class LiveTrader:
             price = data['current_price']
             atr = data['atr']
             
-            # Calculate position size
-            position_value = self.state.current_cash * self.position_size_pct
-            shares = int(position_value / price)
+            # Calculate position size using volatility (Risk Parity)
+            shares = self._calculate_volatility_adjusted_shares(
+                price=price,
+                atr=atr,
+                equity=self.state.total_value
+            )
+            
+            # Ensure we can afford it
+            if shares * price > self.state.current_cash:
+                shares = int(self.state.current_cash / price)
             
             if shares <= 0:
                 continue

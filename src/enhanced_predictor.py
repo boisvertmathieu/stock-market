@@ -285,6 +285,16 @@ class EnhancedMLPredictor:
                 X_train, X_val = X[train_idx], X[val_idx]
                 y_train, y_val = y[train_idx], y[val_idx]
                 
+                
+                # Split raw data
+                X_train_raw, X_val_raw = X[train_idx], X[val_idx]
+                y_train, y_val = y[train_idx], y[val_idx]
+                
+                # Scale within the fold to avoid leakage
+                fold_scaler = StandardScaler()
+                X_train = fold_scaler.fit_transform(X_train_raw)
+                X_val = fold_scaler.transform(X_val_raw)
+                
                 model = xgb.XGBClassifier(
                     **params,
                     random_state=42,
@@ -359,14 +369,14 @@ class EnhancedMLPredictor:
         
         self.feature_names = X.columns.tolist()
         
-        # Scale features
-        X_scaled = self.scaler.fit_transform(X)
+        X_values = X.values
         y_shifted = y.values + 2  # Shift to 0-4
         
         # Optimize hyperparameters
         if self.optimize_hyperparams and len(X) >= 50:
             try:
-                self.best_params = self._optimize_with_optuna(X_scaled, y_shifted, n_optuna_trials)
+                # Pass unscaled data to optimization
+                self.best_params = self._optimize_with_optuna(X_values, y_shifted, n_optuna_trials)
             except Exception as e:
                 logger.debug(f"Optuna optimization failed: {e}")
                 self.best_params = self._get_default_params()
@@ -415,6 +425,9 @@ class EnhancedMLPredictor:
                 logger.error(f"Simplified training also failed: {e}")
                 return {'error': str(e)}
         
+        # Scale features on the FULL dataset for the final model
+        X_scaled = self.scaler.fit_transform(X_values)
+        
         try:
             self.model.fit(X_scaled, y_shifted)
             self.is_trained = True
@@ -431,12 +444,18 @@ class EnhancedMLPredictor:
                 self.shap_explainer = None
         
         # Calculate training metrics via cross-validation
+        # IMPORTANT: Use unscaled data here and scale inside loop to avoid leakage in metrics
         tscv = TimeSeriesSplit(n_splits=n_splits)
         accuracies = []
         
-        for train_idx, test_idx in tscv.split(X_scaled):
-            X_train, X_test = X_scaled[train_idx], X_scaled[test_idx]
+        for train_idx, test_idx in tscv.split(X_values):
+            X_train_raw, X_test_raw = X_values[train_idx], X_values[test_idx]
             y_train, y_test = y_shifted[train_idx], y_shifted[test_idx]
+            
+            # Scale inside CV
+            cv_scaler = StandardScaler()
+            X_train = cv_scaler.fit_transform(X_train_raw)
+            X_test = cv_scaler.transform(X_test_raw)
             
             try:
                 temp_model = xgb.XGBClassifier(**self.best_params, random_state=42,
