@@ -38,10 +38,6 @@ case "$MODE" in
             npx tsx src/App.tsx
         fi
         ;;
-    "scan")
-        # Quick scan
-        python -m src.main scan --quick
-        ;;
     "api")
         # API mode for TUI
         python -m src.main api
@@ -61,12 +57,11 @@ case "$MODE" in
         echo "Installation complete!"
         ;;
     *)
-        echo "Usage: $0 [cli|tui|scan|api|install] [options]"
+        echo "Usage: $0 [cli|tui|api|install] [options]"
         echo ""
         echo "Modes:"
         echo "  cli      Run command-line interface (default)"
         echo "  tui      Run rich terminal UI"
-        echo "  scan     Quick market scan"
         echo "  api      Run API server for TUI"
         echo "  install  Install all dependencies"
         echo ""
@@ -74,5 +69,6 @@ case "$MODE" in
         echo "  $0 cli analyze AAPL"
         echo "  $0 cli scan --quick"
         echo "  $0 cli backtest TSLA"
+        echo "  $0 cli longrun --execute"
         ;;
 esac

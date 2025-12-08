@@ -17,6 +17,7 @@ import logging
 from .data_fetcher import DataFetcher, TOP_100_TICKERS
 from .indicators import TechnicalIndicators
 from .finnhub_client import FinnHubClient, get_finnhub_client
+from .unified_scorer import UnifiedScorer
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +129,7 @@ class LiveTrader:
         
         self.fetcher = DataFetcher()
         self.finnhub = get_finnhub_client()
+        self.scorer = UnifiedScorer()
         self.state: Optional[PortfolioState] = None
         
     def initialize(self, initial_capital: float) -> PortfolioState:
@@ -203,23 +205,32 @@ class LiveTrader:
             return None
     
     def _calculate_signal_score(self, data: Dict) -> float:
-        """Calculate combined signal score including sentiment."""
-        # Base technical score (45%)
-        tech_score = data['technical_signal'] * 0.45
+        """Calculate combined signal score using unified scorer."""
+        # Build technical analysis dict for scorer
+        technical_analysis = {
+            'overall': {
+                'signal_value': data.get('technical_signal', 0),
+                'signal': data.get('technical_name', 'HOLD'),
+            },
+            'price': {
+                'change_percent': data.get('finnhub', {}).get('change_percent', 0) if data.get('finnhub') else 0,
+            },
+            'raw_indicators': {
+                'Volume_Ratio': data.get('volume_ratio', 1.0),
+                'RSI': data.get('rsi', 50),
+            }
+        }
         
-        # FinnHub data (35% fundamental/analyst + 20% sentiment)
-        fh = data.get('finnhub')
-        if fh:
-            analyst = fh.get('analyst_score', 0) * 0.20
-            value = fh.get('value_score', 0) * 0.10
-            momentum = 0.05 if fh.get('change_percent', 0) > 0 else -0.03
-            
-            # Sentiment score (20% weight)
-            sentiment = fh.get('sentiment_score', 0) * 0.20
-            
-            return tech_score + analyst + value + momentum + sentiment
+        # Get Finnhub data from cache
+        finnhub_data = self.finnhub._cache.get(data.get('ticker'))
         
-        return tech_score
+        # Use unified scorer
+        result = self.scorer.calculate_score(
+            technical_analysis=technical_analysis,
+            finnhub_data=finnhub_data,
+        )
+        
+        return result.score
     
     def _update_positions(self, market_data: Dict[str, Dict]):
         """Update current prices and P&L for positions."""
@@ -292,7 +303,8 @@ class LiveTrader:
                 continue
             
             score = self._calculate_signal_score(data)
-            if score > 0.5:  # Bullish threshold
+            logger.info(f"{ticker}: score={score:.3f} (threshold=0.4)")
+            if score > 0.4:  # Lowered threshold for more opportunities
                 scored.append((ticker, score, data))
         
         # Sort by score and take top opportunities

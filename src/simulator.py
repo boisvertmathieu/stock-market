@@ -15,6 +15,7 @@ import json
 from .data_fetcher import DataFetcher, TOP_100_TICKERS
 from .indicators import TechnicalIndicators, Signal
 from .predictor import MLPredictor, PredictionClass
+from .unified_scorer import UnifiedScorer
 
 logger = logging.getLogger(__name__)
 
@@ -171,6 +172,8 @@ class TradingSimulator:
         
         self.fetcher = DataFetcher()
         self.predictors: Dict[str, MLPredictor] = {}
+        # Use unified scorer without Finnhub for backtesting (historical data)
+        self.scorer = UnifiedScorer(include_finnhub=False)
         
         # State
         self.cash = initial_capital
@@ -238,11 +241,12 @@ class TradingSimulator:
                 except:
                     pass
             
-            # Combined score (rely more on technical if ML not available)
-            if ml_score != 0:
-                combined_score = 0.5 * tech_score + 0.5 * ml_score
-            else:
-                combined_score = tech_score  # Use only technical
+            # Use unified scorer (without Finnhub for historical backtesting)
+            unified_result = self.scorer.calculate_score(
+                technical_analysis=analysis,
+                ml_result=ml_result if predictor.is_trained else None,
+            )
+            combined_score = unified_result.score
             
             return {
                 'ticker': ticker,

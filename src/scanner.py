@@ -15,6 +15,8 @@ from datetime import datetime
 from .data_fetcher import DataFetcher, TOP_100_TICKERS
 from .indicators import TechnicalIndicators, Signal
 from .predictor import MLPredictor, PredictionClass
+from .unified_scorer import UnifiedScorer, SignalStrength
+from .finnhub_client import get_finnhub_client
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +63,8 @@ class MarketScanner:
         self.max_workers = max_workers
         self.fetcher = DataFetcher()
         self.results: Dict[str, TickerAnalysis] = {}
+        self.scorer = UnifiedScorer()
+        self.finnhub = get_finnhub_client()
         
     def _analyze_single_ticker(self, ticker: str, period: str = "1y") -> Optional[TickerAnalysis]:
         """
@@ -92,29 +96,17 @@ class MarketScanner:
             predictor.train(df_with_indicators, n_splits=3)
             ml_result = predictor.predict(df_with_indicators)
             
-            # Combine signals for overall action
-            tech_score = analysis['overall']['signal_value']
-            ml_score = ml_result.prediction.value if ml_result else 0
+            # Use unified scorer for consistent scoring
+            finnhub_data = self.finnhub._cache.get(ticker)
+            unified_result = self.scorer.calculate_score(
+                technical_analysis=analysis,
+                ml_result=ml_result,
+                finnhub_data=finnhub_data,
+            )
             
-            # Weight: 60% technical, 40% ML
-            combined_score = 0.6 * tech_score + 0.4 * ml_score
-            
-            # Determine action
-            if combined_score >= 1.5:
-                action = "STRONG BUY"
-                action_strength = 2
-            elif combined_score >= 0.5:
-                action = "BUY"
-                action_strength = 1
-            elif combined_score <= -1.5:
-                action = "STRONG SELL"
-                action_strength = -2
-            elif combined_score <= -0.5:
-                action = "SELL"
-                action_strength = -1
-            else:
-                action = "HOLD"
-                action_strength = 0
+            combined_score = unified_result.score
+            action = self.scorer.get_signal_name(unified_result).upper()
+            action_strength = unified_result.signal.value
             
             # Extract key factors
             key_factors = []

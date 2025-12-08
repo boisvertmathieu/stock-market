@@ -13,6 +13,7 @@ import logging
 
 from .data_fetcher import DataFetcher, TOP_100_TICKERS
 from .indicators import TechnicalIndicators
+from .unified_scorer import UnifiedScorer
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,8 @@ class MomentumStrategy:
             logging.getLogger('src.data_fetcher').setLevel(logging.CRITICAL)
         
         self.fetcher = DataFetcher()
+        # Unified scorer for consistent scoring
+        self.scorer = UnifiedScorer()
         
         # FinnHub data cache
         self._finnhub_data = {}
@@ -80,67 +83,35 @@ class MomentumStrategy:
             self._finnhub_loaded = True  # Don't retry
     
     def _score_ticker(self, df: pd.DataFrame, ticker: str = None) -> float:
-        """Score a ticker by momentum + fundamental factors."""
+        """Score a ticker using unified scoring + momentum."""
         if len(df) < 60:
             return -999
         
         try:
-            # 1-month momentum (20 days)
+            # Calculate technical indicators
+            ti = TechnicalIndicators(df)
+            analysis = ti.get_comprehensive_analysis()
+            
+            # Get finnhub data if available
+            finnhub_data = self._finnhub_data.get(ticker) if ticker else None
+            
+            # Use unified scorer
+            unified_result = self.scorer.calculate_score(
+                technical_analysis=analysis,
+                finnhub_data=finnhub_data,
+            )
+            
+            # Add momentum boost for strategy emphasis
             mom_20 = (df['Close'].iloc[-1] / df['Close'].iloc[-20] - 1) if len(df) >= 20 else 0
-            
-            # 3-month momentum (60 days)
             mom_60 = (df['Close'].iloc[-1] / df['Close'].iloc[-60] - 1) if len(df) >= 60 else 0
+            momentum_boost = 0.3 * mom_20 + 0.2 * mom_60
             
-            # 6-month momentum (120 days)
-            mom_120 = (df['Close'].iloc[-1] / df['Close'].iloc[-120] - 1) if len(df) >= 120 else 0
-            
-            # Volatility-adjusted returns (Sharpe-like)
-            returns = df['Close'].pct_change().tail(60)
-            sharpe = returns.mean() / returns.std() * np.sqrt(252) if returns.std() > 0 else 0
-            
-            # Volume trend (increasing volume = stronger trend)
+            # Volume trend boost
             vol_trend = df['Volume'].tail(20).mean() / df['Volume'].tail(60).mean() if df['Volume'].tail(60).mean() > 0 else 1
+            volume_boost = 0.1 if vol_trend > 1.2 else 0
             
-            # Base momentum score (60%)
-            momentum_score = 0.4 * mom_20 + 0.3 * mom_60 + 0.2 * mom_120 + 0.1 * sharpe * 0.1
-            
-            # Volume boost
-            if vol_trend > 1.2:
-                momentum_score *= 1.1
-            
-            # FinnHub data: analyst (15%) + fundamental (15%) + sentiment (15%)
-            fundamental_score = 0
-            analyst_score = 0
-            sentiment_score = 0
-            has_finnhub_data = ticker and ticker in self._finnhub_data
-            
-            if has_finnhub_data:
-                fh = self._finnhub_data[ticker]
-                
-                # Analyst score (-1 to +1) -> boost/penalty (15%)
-                analyst_score = fh.analyst_score * 0.15
-                
-                # Value score (0 to 1) -> boost for value (15%)
-                fundamental_score = fh.value_score * 0.15
-                
-                # High growth penalty if overvalued (P/E > 50)
-                if fh.pe_ratio and fh.pe_ratio > 50:
-                    fundamental_score -= 0.05
-                
-                # Profit margin bonus
-                if fh.profit_margin and fh.profit_margin > 0.25:
-                    fundamental_score += 0.05
-                
-                # Sentiment score from news (15% weight)
-                sentiment_score = fh.sentiment_score * 0.15
-            
-            # Fallback: if no FinnHub data, use 100% momentum scoring
-            if not has_finnhub_data:
-                return momentum_score
-            
-            # Combined score: momentum(55%) + analyst(15%) + fundamental(15%) + sentiment(15%)
-            # Momentum contribution is scaled to 55% when all data available
-            final_score = (momentum_score * 0.55 / 0.6) + analyst_score + fundamental_score + sentiment_score
+            # Combined: unified score + momentum emphasis
+            final_score = unified_result.score + momentum_boost + volume_boost
             
             return final_score
             

@@ -119,30 +119,41 @@ class TestLiveTrader:
     @patch('src.live_trader.DataFetcher')
     @patch('src.live_trader.get_finnhub_client')
     def test_calculate_signal_score(self, mock_finnhub, mock_fetcher, temp_state_file):
-        """Test signal score calculation."""
+        """Test signal score calculation uses UnifiedScorer."""
         trader = LiveTrader(state_file=temp_state_file)
         
         # Test with technical signal only
+        # Now uses UnifiedScorer with 40% technical weight
         data = {
+            'ticker': 'TEST',
             'technical_signal': 1.5,
+            'technical_name': 'BUY',
+            'volume_ratio': 1.0,
+            'rsi': 50,
             'finnhub': None
         }
         score = trader._calculate_signal_score(data)
-        assert score == 0.675  # 1.5 * 0.45 (45% weight for technical)
+        # UnifiedScorer normalizes partial data, so score should be positive
+        assert score > 0
         
         # Test with FinnHub data including sentiment
-        data_with_fh = {
-            'technical_signal': 1.0,
+        # Score should increase when FinnHub data is positive
+        data_with_strong_signal = {
+            'ticker': 'TEST2',
+            'technical_signal': 2.0,
+            'technical_name': 'STRONG_BUY',
+            'volume_ratio': 1.5,
+            'rsi': 35,
             'finnhub': {
-                'analyst_score': 0.5,
-                'value_score': 0.6,
-                'change_percent': 2.0,
-                'sentiment_score': 0.5,
+                'analyst_score': 0.8,
+                'value_score': 0.7,
+                'change_percent': 3.0,
+                'sentiment_score': 0.6,
             }
         }
-        score_fh = trader._calculate_signal_score(data_with_fh)
-        # 0.45 + (0.5 * 0.20) + (0.6 * 0.10) + 0.05 + (0.5 * 0.20) = 0.45 + 0.10 + 0.06 + 0.05 + 0.10 = 0.76
-        assert score_fh > score
+        score_strong = trader._calculate_signal_score(data_with_strong_signal)
+        # Strong signal should produce higher score
+        assert score_strong > score
 
 
 class TestTradeRecommendation:

@@ -264,20 +264,49 @@ class MLPredictor:
         # Final training on all data
         try:
             X_scaled = self.scaler.fit_transform(X)
-            self.model = xgb.XGBClassifier(
-                n_estimators=100,
-                max_depth=5,
-                learning_rate=0.1,
-                subsample=0.8,
-                colsample_bytree=0.8,
-                random_state=42,
-                use_label_encoder=False,
-                eval_metric='mlogloss',
-                verbosity=0,
-                num_class=5,
-                objective='multi:softprob'
-            )
-            self.model.fit(X_scaled, y + 2)
+            y_shifted = y + 2  # Shift to 0-4
+            
+            # Check if all classes are present
+            unique_classes = np.unique(y_shifted)
+            missing_classes = set(range(5)) - set(unique_classes.astype(int))
+            
+            if missing_classes:
+                # Fallback to 3-class model: bearish(0), neutral(1), bullish(2)
+                logger.debug(f"Missing classes {missing_classes}, using simplified model")
+                y_simple = np.where(y_shifted < 2, 0, np.where(y_shifted > 2, 2, 1))
+                
+                self.model = xgb.XGBClassifier(
+                    n_estimators=100,
+                    max_depth=5,
+                    learning_rate=0.1,
+                    subsample=0.8,
+                    colsample_bytree=0.8,
+                    random_state=42,
+                    use_label_encoder=False,
+                    eval_metric='mlogloss',
+                    verbosity=0,
+                    num_class=3,
+                    objective='multi:softprob'
+                )
+                self.model.fit(X_scaled, y_simple)
+                self._using_simple_model = True
+            else:
+                self.model = xgb.XGBClassifier(
+                    n_estimators=100,
+                    max_depth=5,
+                    learning_rate=0.1,
+                    subsample=0.8,
+                    colsample_bytree=0.8,
+                    random_state=42,
+                    use_label_encoder=False,
+                    eval_metric='mlogloss',
+                    verbosity=0,
+                    num_class=5,
+                    objective='multi:softprob'
+                )
+                self.model.fit(X_scaled, y_shifted)
+                self._using_simple_model = False
+            
             self.is_trained = True
         except Exception as e:
             logger.error(f"Final model training failed: {e}")
@@ -329,11 +358,23 @@ class MLPredictor:
             X_scaled = self.scaler.transform(latest)
             
             # Get prediction and probabilities
-            pred_class = self.model.predict(X_scaled)[0] - 2  # Shift back to -2 to 2
+            raw_pred = self.model.predict(X_scaled)[0]
             probabilities = self.model.predict_proba(X_scaled)[0]
             
+            # Handle simplified 3-class model vs full 5-class model
+            if getattr(self, '_using_simple_model', False):
+                # 3-class model: 0=bearish, 1=neutral, 2=bullish
+                # Map to -1, 0, 1
+                pred_class = int(raw_pred) - 1
+            else:
+                # 5-class model: 0-4 maps to -2 to 2
+                pred_class = int(raw_pred) - 2
+            
+            # Clamp to valid range
+            pred_class = max(-2, min(2, pred_class))
+            
             # Get confidence (max probability)
-            max_prob = max(probabilities)
+            max_prob = float(max(probabilities))
             
             if max_prob > 0.6:
                 confidence = "HIGH"
@@ -356,7 +397,7 @@ class MLPredictor:
                 0: PredictionClass.FLAT,
                 -1: PredictionClass.DOWN,
                 -2: PredictionClass.STRONG_DOWN,
-            }[int(pred_class)]
+            }[pred_class]
             
             return PredictionResult(
                 prediction=pred_enum,

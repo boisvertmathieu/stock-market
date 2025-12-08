@@ -384,11 +384,43 @@ class EnhancedMLPredictor:
             objective='multi:softprob'
         )
         
+        # Validate that we have samples for all classes (0-4)
+        unique_classes = np.unique(y_shifted)
+        missing_classes = set(range(5)) - set(unique_classes.astype(int))
+        
+        if missing_classes:
+            # Not all classes represented - this is common for low-volatility stocks
+            # Use a simpler binary classifier approach instead
+            logger.debug(f"Missing classes {missing_classes}, falling back to simplified model")
+            # Remap to 3 classes: bearish(0), neutral(1), bullish(2)
+            y_simple = np.where(y_shifted < 2, 0, np.where(y_shifted > 2, 2, 1))
+            
+            try:
+                simple_model = xgb.XGBClassifier(
+                    **self.best_params,
+                    random_state=42,
+                    use_label_encoder=False,
+                    eval_metric='mlogloss',
+                    verbosity=0,
+                    num_class=3,
+                    objective='multi:softprob'
+                )
+                simple_model.fit(X_scaled, y_simple)
+                self.model = simple_model
+                self.is_trained = True
+                self._using_simple_model = True
+                logger.info("Training complete using simplified 3-class model")
+                return {'accuracy': 0.0, 'note': 'Using simplified model'}
+            except Exception as e:
+                logger.error(f"Simplified training also failed: {e}")
+                return {'error': str(e)}
+        
         try:
             self.model.fit(X_scaled, y_shifted)
             self.is_trained = True
+            self._using_simple_model = False
         except Exception as e:
-            logger.error(f"Training failed: {e}")
+            logger.error(f"Final model training failed: {e}")
             return {'error': str(e)}
         
         # Initialize SHAP explainer

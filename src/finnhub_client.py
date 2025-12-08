@@ -4,9 +4,11 @@ Fetches real-time quotes, fundamentals, analyst ratings, and news directly from 
 """
 
 import os
+import json
 import requests
+from pathlib import Path
 from typing import Dict, Any, Optional, List
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
 import logging
 import time
@@ -24,6 +26,10 @@ logger = logging.getLogger(__name__)
 # Finnhub API configuration
 FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
 FINNHUB_BASE_URL = "https://finnhub.io/api/v1"
+
+# Cache configuration (2h TTL aligned with longrun --execute schedule)
+CACHE_FILE = os.getenv("FINNHUB_CACHE_FILE", "./data/finnhub_cache.json")
+CACHE_TTL_HOURS = 2
 
 
 @dataclass
@@ -154,23 +160,111 @@ class TickerData:
 
 
 class FinnHubClient:
-    """Client to fetch data directly from Finnhub API."""
+    """Client to fetch data directly from Finnhub API with persistent caching."""
     
-    def __init__(self, api_key: str = FINNHUB_API_KEY):
+    def __init__(self, api_key: str = FINNHUB_API_KEY, cache_file: str = CACHE_FILE):
         self.api_key = api_key
         self.base_url = FINNHUB_BASE_URL
+        self.cache_file = Path(cache_file)
         self._cache: Dict[str, TickerData] = {}
+        self._cache_timestamp: Optional[datetime] = None
         self._last_fetch = None
         self.last_error: Optional[str] = None
         self.last_fetch_success: bool = False
         self.timeout = int(os.getenv("FINNHUB_TIMEOUT", "30"))
         # Rate limiting: Finnhub free tier allows 60 calls/minute
         self.rate_limit_delay = float(os.getenv("FINNHUB_RATE_LIMIT_DELAY", "0.5"))
+        
+        # Load cache from file on startup
+        self._load_cache()
+    
+    def _load_cache(self) -> bool:
+        """Load cache from file if valid (within TTL)."""
+        if not self.cache_file.exists():
+            logger.debug(f"Cache file not found: {self.cache_file}")
+            return False
+        
+        try:
+            with open(self.cache_file, 'r') as f:
+                data = json.load(f)
+            
+            # Check timestamp
+            timestamp_str = data.get('timestamp')
+            if not timestamp_str:
+                return False
+            
+            cache_time = datetime.fromisoformat(timestamp_str)
+            age = datetime.now() - cache_time
+            
+            if age > timedelta(hours=CACHE_TTL_HOURS):
+                logger.info(f"Cache expired ({age.total_seconds() / 3600:.1f}h old)")
+                return False
+            
+            # Reconstruct TickerData objects
+            tickers_data = data.get('tickers', {})
+            for ticker, ticker_dict in tickers_data.items():
+                self._cache[ticker] = TickerData(**ticker_dict)
+            
+            self._cache_timestamp = cache_time
+            self.last_fetch_success = len(self._cache) > 0
+            logger.info(f"Loaded {len(self._cache)} tickers from cache ({age.total_seconds() / 60:.0f}m old)")
+            return True
+            
+        except Exception as e:
+            logger.warning(f"Failed to load cache: {e}")
+            return False
+    
+    def _save_cache(self) -> bool:
+        """Save current cache to file."""
+        try:
+            # Ensure directory exists
+            self.cache_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Convert TickerData to dicts
+            tickers_data = {}
+            for ticker, data in self._cache.items():
+                ticker_dict = asdict(data)
+                tickers_data[ticker] = ticker_dict
+            
+            cache_data = {
+                'timestamp': datetime.now().isoformat(),
+                'tickers': tickers_data,
+            }
+            
+            with open(self.cache_file, 'w') as f:
+                json.dump(cache_data, f, indent=2)
+            
+            self._cache_timestamp = datetime.now()
+            logger.info(f"Saved {len(self._cache)} tickers to cache")
+            return True
+            
+        except Exception as e:
+            logger.warning(f"Failed to save cache: {e}")
+            return False
+    
+    def is_cache_valid(self) -> bool:
+        """Check if current cache is within TTL."""
+        if not self._cache or not self._cache_timestamp:
+            return False
+        
+        age = datetime.now() - self._cache_timestamp
+        return age < timedelta(hours=CACHE_TTL_HOURS)
+    
+    def invalidate_cache(self) -> None:
+        """Force cache invalidation."""
+        self._cache.clear()
+        self._cache_timestamp = None
+        if self.cache_file.exists():
+            try:
+                self.cache_file.unlink()
+                logger.info("Cache invalidated and file removed")
+            except Exception as e:
+                logger.warning(f"Failed to remove cache file: {e}")
     
     @property
     def is_available(self) -> bool:
-        """Check if client is properly configured and last fetch was successful."""
-        return bool(self.api_key) and self.last_fetch_success and len(self._cache) > 0
+        """Check if client is properly configured and has data available."""
+        return bool(self.api_key) and len(self._cache) > 0
     
     def _make_request(self, endpoint: str, params: Dict[str, Any] = None) -> Optional[Dict]:
         """Make a request to Finnhub API with error handling."""
@@ -332,26 +426,36 @@ class FinnHubClient:
             logger.warning(f"Failed to fetch data for {ticker}: {e}")
             return None
     
-    def fetch_all(self, tickers: List[str] = None) -> Dict[str, TickerData]:
+    def fetch_all(self, tickers: List[str] = None, force_refresh: bool = False) -> Dict[str, TickerData]:
         """
-        Fetch all ticker data from Finnhub API.
+        Fetch all ticker data from Finnhub API with caching.
         
         Args:
             tickers: List of ticker symbols to fetch. If None, uses default list.
+            force_refresh: If True, bypass cache and fetch fresh data.
         
         Returns:
             Dictionary mapping ticker symbols to TickerData objects
         """
+        if tickers is None:
+            # Default tickers if none provided
+            tickers = ["AAPL", "META", "NVDA", "TSLA", "MSFT", "AMZN", 
+                       "GOOGL", "AMD", "NFLX", "JPM", "SPY", "QQQ"]
+        
+        # Return cached data if valid and all requested tickers are present
+        if not force_refresh and self.is_cache_valid():
+            missing = [t for t in tickers if t not in self._cache]
+            if not missing:
+                logger.info(f"Using cached data ({len(self._cache)} tickers)")
+                return self._cache
+            else:
+                logger.info(f"Cache missing {len(missing)} tickers, fetching fresh data")
+        
         if not self.api_key:
             logger.error("⚠️ FINNHUB_API_KEY not configured - cannot fetch data")
             self.last_error = "FINNHUB_API_KEY not configured"
             self.last_fetch_success = False
             return self._cache
-        
-        if tickers is None:
-            # Default tickers if none provided
-            tickers = ["AAPL", "META", "NVDA", "TSLA", "MSFT", "AMZN", 
-                       "GOOGL", "AMD", "NFLX", "JPM", "SPY", "QQQ"]
         
         try:
             result = {}
@@ -371,6 +475,10 @@ class FinnHubClient:
             self._last_fetch = datetime.now()
             self.last_fetch_success = True
             self.last_error = None
+            
+            # Save cache to file for persistence
+            self._save_cache()
+            
             logger.info(f"✅ Fetched {len(result)} tickers from Finnhub API")
             return result
             
