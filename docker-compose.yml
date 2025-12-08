@@ -22,6 +22,11 @@ services:
       - trader
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Sync timezone with host to ensure schedule runs on local time
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - TZ=America/New_York
     command: daemon --docker
     restart: always # Auto-restart on Pi reboot
     labels:
